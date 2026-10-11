@@ -1,0 +1,14 @@
+python,9500
+python tutorial,7200
+python programming,6800
+python pandas,5100
+python machine learning,4900
+pycharm,4200
+pytorch,3800
+python flask,3100
+javascript,8500
+java programming,8000
+java tutorial,6000
+data structures,7500
+data structures and algorithms,7000
+database management,4500
