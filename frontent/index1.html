@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trievo — Every Prefix Leads Somewhere.</title>
+<meta name="description" content="Trievo: prefix-powered search for technology queries.">
+<meta name="theme-color" content="#050506">
+<style>
+  :root {
+    --bg-0: #050506;
+    --bg-1: #141417;
+    --text: #f5f5f7;
+    --muted: #8b8b94;
+    --muted-2: #62626b;
+    --silver: rgba(214, 214, 224, 0.28);
+    --silver-strong: rgba(226, 226, 238, 0.55);
+    --glass: rgba(20, 20, 24, 0.72);
+    --purple-1: #c4b5fd;
+    --purple-2: #8b5cf6;
+    --purple-3: #5b21b6;
+    --ring: rgba(139, 92, 246, 0.45);
+    --ease: cubic-bezier(.2, .7, .2, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; }
+
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    color: var(--text);
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background:
+      radial-gradient(ellipse 60% 45% at 50% 36%, rgba(124, 58, 237, 0.16), transparent 70%),
+      radial-gradient(ellipse 80% 60% at 50% 110%, rgba(255, 255, 255, 0.04), transparent 70%),
+      linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+    background-attachment: fixed;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* soft vignette */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.72) 100%);
+    z-index: 0;
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px 64px;
+  }
+
+  /* ---------- Brand ---------- */
+  .brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 44px;
+  }
+
+  /* Logo stage: same 104px box as the original logo, so layout is unchanged.
+     Everything animated lives inside it (absolutely positioned, overflow visible). */
+  .logo-stage {
+    position: relative;
+    width: 104px;
+    height: 104px;
+    animation: float 9s ease-in-out infinite;
+  }
+
+  .logo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    filter: drop-shadow(0 0 22px rgba(139, 92, 246, 0.45));
+  }
+
+  .wordmark {
+    position: relative;
+    z-index: 2;
+    margin-top: 14px;
+    font-size: clamp(2rem, 5vw, 2.75rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  .tagline {
+    position: relative;
+    z-index: 2;
+    margin-top: 12px;
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  /* ---------- Logo animation (sequence follows the reference video) ----------
+     0.0s  purple aura builds behind the (still hidden) logo
+     0.7s  logo fades / scales in
+     1.9s  3D flip, lens glint on the reverse side
+     3.5s  ripple in the lens, halo pulse, trie lights up into a constellation
+     5.5s  sparkle at the handle, then settle into a calm idle glow
+     Base (no-animation) styles are the final resting state, so
+     prefers-reduced-motion simply shows the finished logo. */
+
+  .aura, .halo {
+    position: absolute;
+    left: 45%;               /* centre of the lens (54/120 of the logo box) */
+    top: 45%;
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+
+  .aura {
+    z-index: -1;
+    width: 440%;
+    height: 440%;
+    background: radial-gradient(closest-side, rgba(124, 58, 237, 0.34), rgba(124, 58, 237, 0.12) 48%, transparent 100%);
+    opacity: 0.6;
+    animation:
+      auraIn 1.6s ease-out both,
+      breathe 7s ease-in-out 1.6s infinite;
+  }
+
+  .halo {
+    z-index: -1;
+    width: 290%;
+    height: 290%;
+    background: radial-gradient(closest-side,
+      rgba(139, 92, 246, 0) 0%,
+      rgba(139, 92, 246, 0.20) 52%,
+      rgba(167, 139, 250, 0.46) 70%,
+      rgba(139, 92, 246, 0.10) 88%,
+      transparent 100%);
+    mix-blend-mode: screen;
+    opacity: 0;
+    animation: halo 1.9s cubic-bezier(.2, .6, .2, 1) 3.6s both;
+  }
+
+  .pop {
+    position: absolute;
+    inset: 0;
+    perspective: 700px;
+    animation: popIn 1s cubic-bezier(.2, .7, .2, 1) .7s both;
+  }
+
+  .flip {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    animation: flip 1.5s cubic-bezier(.65, 0, .35, 1) 1.9s both;
+  }
+
+  /* extruded edge layers (added by script) give the ring thickness while it turns */
+  .depth {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .trie { animation: trieGlow 1.9s ease-in-out 3.7s both; }
+
+  .glint { opacity: 0; animation: glint .9s ease-in-out 2.4s both; }
+  .ripple {
+    opacity: 0;
+    transform-box: view-box;
+    transform-origin: 54px 54px;
+    animation: ripple 1.1s ease-out 3.45s both;
+  }
+
+  .const path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    opacity: 0;
+    animation: draw 1.7s ease-in-out both;
+  }
+  .const circle {
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: nodePop 1.7s ease-in-out both;
+  }
+  .const > :nth-child(1)  { animation-delay: 3.85s; }
+  .const > :nth-child(2)  { animation-delay: 3.92s; }
+  .const > :nth-child(3)  { animation-delay: 3.99s; }
+  .const > :nth-child(4)  { animation-delay: 4.06s; }
+  .const > :nth-child(5)  { animation-delay: 4.13s; }
+  .const > :nth-child(6)  { animation-delay: 4.20s; }
+  .const > :nth-child(7)  { animation-delay: 4.0s; }
+  .const > :nth-child(8)  { animation-delay: 4.1s; }
+  .const > :nth-child(9)  { animation-delay: 4.2s; }
+  .const > :nth-child(10) { animation-delay: 3.95s; }
+  .const > :nth-child(11) { animation-delay: 4.05s; }
+  .const > :nth-child(12) { animation-delay: 4.15s; }
+  .const > :nth-child(13) { animation-delay: 4.1s; }
+  .const > :nth-child(14) { animation-delay: 4.2s; }
+
+  .spark {
+    opacity: 0;
+    transform-box: view-box;
+    transform-origin: 81px 81px;
+    animation: spark .9s ease-out 5.5s both;
+  }
+
+  @keyframes auraIn   { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } to { opacity: .9; transform: translate(-50%, -50%) scale(1); } }
+  @keyframes breathe  { 0%, 100% { opacity: .55; } 50% { opacity: .8; } }
+  @keyframes popIn    { from { opacity: 0; transform: scale(.72); filter: blur(10px); } to { opacity: 1; transform: scale(1); filter: none; } }
+  @keyframes flip     { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+  @keyframes glint    { 0% { opacity: 0; transform: translateX(-34px); } 25%, 75% { opacity: 1; } 100% { opacity: 0; transform: translateX(150px); } }
+  @keyframes ripple   { 0% { opacity: 0; transform: scale(.1); } 25% { opacity: .38; } 100% { opacity: 0; transform: scale(1); } }
+  @keyframes halo     {
+    0%   { opacity: 0;  transform: translate(-50%, -50%) scale(.45); }
+    28%  { opacity: 1; }
+    100% { opacity: 0;  transform: translate(-50%, -50%) scale(1.15); }
+  }
+  @keyframes trieGlow {
+    0%, 100% { filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)); }
+    40%, 60% { filter: drop-shadow(0 0 2.4px rgba(255, 255, 255, .95)); }
+  }
+  @keyframes draw {
+    0%   { stroke-dashoffset: 1; opacity: 0; }
+    15%  { opacity: 1; }
+    55%  { stroke-dashoffset: 0; opacity: 1; }
+    100% { stroke-dashoffset: 0; opacity: 0; }
+  }
+  @keyframes nodePop {
+    0%   { opacity: 0; transform: scale(0); }
+    30%  { opacity: 1; transform: scale(1.35); }
+    55%  { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(.6); }
+  }
+  @keyframes spark {
+    0%   { opacity: 0; transform: scale(0) rotate(-30deg); }
+    35%  { opacity: 1; transform: scale(1.25) rotate(0deg); }
+    100% { opacity: 0; transform: scale(.3) rotate(30deg); }
+  }
+
+  /* ---------- Search ---------- */
+  .search {
+    position: relative;
+    width: min(100%, 760px);
+  }
+
+  .bar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 68px;
+    padding: 0 14px 0 24px;
+    border-radius: 34px;
+    background: linear-gradient(180deg, rgba(34, 34, 40, 0.78), rgba(14, 14, 17, 0.82));
+    border: 1px solid var(--silver);
+    box-shadow:
+      0 18px 50px rgba(0, 0, 0, 0.55),
+      0 2px 0 rgba(255, 255, 255, 0.04) inset;
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    transition: border-color .3s var(--ease), box-shadow .3s var(--ease), transform .3s var(--ease);
+  }
+
+  .bar:hover {
+    border-color: var(--silver-strong);
+  }
+
+  .bar:focus-within {
+    border-color: rgba(196, 181, 253, 0.7);
+    box-shadow:
+      0 18px 60px rgba(0, 0, 0, 0.6),
+      0 0 0 4px var(--ring),
+      0 0 48px rgba(139, 92, 246, 0.25);
+  }
+
+  .bar .icon-search {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    color: #e6e6ee;
+  }
+
+  #q {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    color: var(--text);
+    font: inherit;
+    font-size: 1.15rem;
+    letter-spacing: 0.005em;
+    caret-color: var(--purple-1);
+  }
+
+  #q::placeholder { color: var(--muted-2); }
+  #q::-webkit-search-cancel-button { display: none; }
+
+  .sparkle {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    color: var(--purple-1);
+    opacity: 0.85;
+    transition: transform .5s var(--ease), opacity .3s;
+  }
+  .bar:focus-within .sparkle { opacity: 1; transform: rotate(18deg) scale(1.08); }
+
+  .clear {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.07);
+    color: #cfcfd8;
+    cursor: pointer;
+    opacity: 0;
+    transform: scale(.85);
+    pointer-events: none;
+    transition: opacity .2s, transform .2s var(--ease), background .2s;
+  }
+  .clear.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
+  .clear:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+  .clear svg { width: 14px; height: 14px; }
+
+  /* ---------- Dropdown ---------- */
+  .dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    right: 0;
+    z-index: 10;
+    padding: 8px;
+    border-radius: 24px;
+    background: var(--glass);
+    border: 1px solid var(--silver);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.65);
+    -webkit-backdrop-filter: blur(22px);
+    backdrop-filter: blur(22px);
+    opacity: 0;
+    transform: translateY(-6px);
+    pointer-events: none;
+    visibility: hidden;
+    transition: opacity .18s var(--ease), transform .18s var(--ease), visibility 0s .18s;
+  }
+  .dropdown.open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    visibility: visible;
+    transition: opacity .18s var(--ease), transform .18s var(--ease);
+  }
+
+  .options { list-style: none; }
+
+  .option {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    color: #d6d6de;
+    font-size: 1.02rem;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .option svg { flex: none; width: 16px; height: 16px; color: var(--muted-2); }
+  .option .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .option .label b { color: #fff; font-weight: 600; }
+  .option .hint {
+    flex: none;
+    font-size: 0.72rem;
+    color: var(--muted);
+    border: 1px solid var(--silver);
+    border-radius: 6px;
+    padding: 2px 7px;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .option[aria-selected="true"] {
+    background: linear-gradient(90deg, rgba(139, 92, 246, 0.22), rgba(139, 92, 246, 0.07));
+  }
+  .option[aria-selected="true"] svg { color: var(--purple-1); }
+  .option[aria-selected="true"] .hint { opacity: 1; }
+
+  .status {
+    padding: 8px 16px 6px;
+    font-size: 0.74rem;
+    letter-spacing: 0.03em;
+    color: var(--muted-2);
+  }
+  .status[hidden] { display: none; }
+
+  /* ---------- Shortcuts ---------- */
+  .shortcuts {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    width: min(100%, 760px);
+  }
+
+  .chip {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(214, 214, 224, 0.16);
+    background: rgba(255, 255, 255, 0.025);
+    color: #a9a9b3;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: color .2s, border-color .2s, background .2s, transform .2s var(--ease);
+  }
+  .chip:hover, .chip:focus-visible {
+    color: #fff;
+    border-color: rgba(196, 181, 253, 0.5);
+    background: rgba(139, 92, 246, 0.12);
+    transform: translateY(-1px);
+    outline: none;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  :focus-visible { outline: 2px solid var(--purple-1); outline-offset: 3px; }
+  #q:focus-visible { outline: none; }
+
+  @media (max-width: 560px) {
+    .logo-stage { width: 84px; height: 84px; }
+    .brand { margin-bottom: 32px; }
+    .bar { height: 60px; padding-left: 18px; gap: 10px; border-radius: 30px; }
+    #q { font-size: 1.02rem; }
+    .option .hint { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <header class="brand">
+    <div class="logo-stage" id="logo-stage">
+      <div class="aura" aria-hidden="true"></div>
+      <div class="halo" aria-hidden="true"></div>
+      <div class="pop">
+        <div class="flip" id="flip">
+          <svg class="logo" viewBox="0 0 120 120" role="img" aria-label="Trievo logo" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="14" y1="10" x2="108" y2="110">
+                <stop offset="0" stop-color="#d8ccff"/>
+                <stop offset="0.45" stop-color="#8b5cf6"/>
+                <stop offset="1" stop-color="#4c1d95"/>
+              </linearGradient>
+              <radialGradient id="core" cx="0.4" cy="0.35" r="0.8">
+                <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.28"/>
+                <stop offset="1" stop-color="#8b5cf6" stop-opacity="0.03"/>
+              </radialGradient>
+              <linearGradient id="glintG" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+                <stop offset="0.5" stop-color="#fff" stop-opacity="0.6"/>
+                <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+              </linearGradient>
+              <clipPath id="lens"><circle cx="54" cy="54" r="33.5"/></clipPath>
+            </defs>
+            <circle cx="54" cy="54" r="38" fill="url(#core)"/>
+            <!-- ring with integrated magnifier tail -->
+            <circle cx="54" cy="54" r="38" fill="none" stroke="url(#g)" stroke-width="9"/>
+            <line x1="81" y1="81" x2="106" y2="106" stroke="url(#g)" stroke-width="12" stroke-linecap="round"/>
+
+            <!-- lens ripple + glint (animation only) -->
+            <circle class="ripple" cx="54" cy="54" r="30" fill="#c4b5fd"/>
+            <g clip-path="url(#lens)">
+              <g transform="rotate(25 54 54)"><rect class="glint" x="-30" y="-10" width="26" height="140" fill="url(#glintG)"/></g>
+            </g>
+
+            <!-- trie motif -->
+            <g class="trie">
+              <g stroke="#f1ecff" stroke-opacity="0.9" stroke-width="2.6" stroke-linecap="round" fill="none">
+                <path d="M54 38 L42 54 M54 38 L66 54 M66 54 L58 69 M66 54 L74 69"/>
+              </g>
+              <g fill="#fff">
+                <circle cx="54" cy="38" r="5"/>
+                <circle cx="42" cy="54" r="4"/>
+                <circle cx="66" cy="54" r="4"/>
+                <circle cx="58" cy="69" r="3.2"/>
+                <circle cx="74" cy="69" r="3.2"/>
+              </g>
+            </g>
+
+            <!-- constellation that briefly connects the trie to extra nodes (animation only) -->
+            <g class="const" stroke="#fff" stroke-opacity="0.85" stroke-width="1.1" stroke-linecap="round" fill="none">
+              <path pathLength="1" d="M42 54 L33 49"/>
+              <path pathLength="1" d="M54 38 L33 49"/>
+              <path pathLength="1" d="M42 54 L41 72"/>
+              <path pathLength="1" d="M41 72 L58 69"/>
+              <path pathLength="1" d="M41 72 L50 80"/>
+              <path pathLength="1" d="M58 69 L50 80"/>
+              <circle cx="33" cy="49" r="2.3" fill="#fff" stroke="none"/>
+              <circle cx="41" cy="72" r="2.6" fill="#fff" stroke="none"/>
+              <circle cx="50" cy="80" r="2.2" fill="#fff" stroke="none"/>
+              <path pathLength="1" d="M54 38 L73 40"/>
+              <path pathLength="1" d="M73 40 L66 54"/>
+              <path pathLength="1" d="M73 40 L80 58"/>
+              <circle cx="73" cy="40" r="2.4" fill="#fff" stroke="none"/>
+              <circle cx="80" cy="58" r="2.3" fill="#fff" stroke="none"/>
+            </g>
+
+            <!-- sparkle at the ring/handle junction -->
+            <path class="spark" fill="#fff" d="M81 72 L82.6 79.4 L90 81 L82.6 82.6 L81 90 L79.4 82.6 L72 81 L79.4 79.4 Z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+    <h1 class="wordmark">Trievo</h1>
+    <p class="tagline">Every Prefix Leads Somewhere.</p>
+  </header>
+
+  <form class="search" id="search-form" role="search" autocomplete="off">
+    <div class="bar">
+      <svg class="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/>
+      </svg>
+
+      <label for="q" class="sr-only">Search anything in technology</label>
+      <input
+        id="q" type="search" name="q"
+        placeholder="Search anything in technology..."
+        role="combobox" aria-autocomplete="list" aria-haspopup="listbox"
+        aria-expanded="false" aria-controls="listbox"
+        autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+
+      <svg class="sparkle" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 2c.5 4.8 2.2 7 7 7.6-4.8.6-6.5 2.8-7 7.6-.5-4.8-2.2-7-7-7.6C9.8 9 11.5 6.8 12 2z"/>
+        <path d="M19 15c.2 1.9.9 2.8 2.8 3-1.9.3-2.6 1.1-2.8 3-.2-1.9-.9-2.7-2.8-3 1.9-.2 2.6-1.1 2.8-3z" opacity=".8"/>
+      </svg>
+
+      <button type="button" class="clear" id="clear" aria-label="Clear search" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg>
+      </button>
+    </div>
+
+    <div class="dropdown" id="dropdown">
+      <ul class="options" id="listbox" role="listbox" aria-label="Search suggestions"></ul>
+      <p class="status" id="status" hidden></p>
+    </div>
+    <div class="sr-only" id="live" aria-live="polite"></div>
+  </form>
+
+  <nav class="shortcuts" aria-label="Popular technologies">
+    <button type="button" class="chip" data-q="python">Python</button>
+    <button type="button" class="chip" data-q="c++">C++</button>
+    <button type="button" class="chip" data-q="java">Java</button>
+    <button type="button" class="chip" data-q="javascript">JavaScript</button>
+    <button type="button" class="chip" data-q="sql">SQL</button>
+    <button type="button" class="chip" data-q="html">HTML</button>
+    <button type="button" class="chip" data-q="css">CSS</button>
+  </nav>
+
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  /* =====================================================================
+     CONFIG — point these at the C++ backend.
+     Expected: GET {API_BASE}{SUGGEST_PATH}?q=<prefix>&k=<K>
+     Response: ["python tutorial", ...]  or  { "suggestions": [...] }
+               items may be strings or objects with { query | text | suggestion }
+     ===================================================================== */
+  const CONFIG = {
+    API_BASE: "http://localhost:8080",
+    SUGGEST_PATH: "/suggest",
+    K: 5,
+    DEBOUNCE_MS: 120,
+    TIMEOUT_MS: 1500,
+    // When the backend can't be reached, fall back to DEMO_DATA below
+    // (and say so in the dropdown). Set to false to show nothing instead.
+    DEMO_FALLBACK: true,
+    // Where a chosen query goes. Set to "" to only emit the `trievo:search` event.
+    RESULTS_URL: "https://duckduckgo.com/?q=",
+  };
+
+  /* =====================================================================
+     DEMO DATA — used ONLY when the backend is unreachable.
+     Not a real index; replace by connecting the API above.
+     ===================================================================== */
+  const DEMO_DATA = [
+    ["python tutorial", 98], ["python list comprehension", 90], ["python vs c++", 74],
+    ["python decorators", 71], ["python virtual environment", 69], ["python dictionary methods", 66],
+    ["python asyncio", 61], ["python pandas dataframe", 88], ["python for beginners", 93],
+    ["c++ tutorial", 92], ["c++ vector", 80], ["c++ trie implementation", 72],
+    ["c++ smart pointers", 77], ["c++ stl algorithms", 68], ["c++ templates", 70],
+    ["c++ priority queue", 65], ["c++ http server", 58],
+    ["java tutorial", 91], ["java streams", 76], ["java vs python", 73],
+    ["java spring boot", 85], ["java collections framework", 69], ["java interview questions", 78],
+    ["javascript tutorial", 97], ["javascript promises", 82], ["javascript array methods", 84],
+    ["javascript closures", 79], ["javascript fetch api", 75], ["javascript async await", 81],
+    ["html tutorial", 89], ["html forms", 64], ["html5 semantic elements", 60],
+    ["css grid", 83], ["css flexbox", 86], ["css animations", 67], ["css variables", 62],
+    ["sql tutorial", 90], ["sql joins", 87], ["sql injection", 72], ["sql window functions", 63],
+    ["sql vs nosql", 70], ["sql group by", 66],
+    ["react hooks", 85], ["rust ownership", 68], ["go goroutines", 64],
+    ["typescript generics", 71], ["docker compose", 79], ["git rebase", 73],
+    ["linux commands", 82], ["kubernetes basics", 69], ["rest api design", 67],
+    ["data structures and algorithms", 88], ["binary search tree", 70], ["top k algorithm", 61],
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const input = $("q"), form = $("search-form"), dropdown = $("dropdown");
+  const listbox = $("listbox"), statusEl = $("status"), clearBtn = $("clear"), live = $("live");
+
+  const state = { items: [], active: -1, ctrl: null, timer: null, open: false };
+
+  /* ---------- data ---------- */
+  function demoSuggest(q) {
+    const p = q.toLowerCase();
+    return DEMO_DATA
+      .filter(([text]) => text.startsWith(p))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, CONFIG.K)
+      .map(([text]) => text);
+  }
+
+  function normalize(payload) {
+    const arr = Array.isArray(payload) ? payload : (payload && payload.suggestions) || [];
+    return arr
+      .map((x) => (typeof x === "string" ? x : x && (x.query || x.text || x.suggestion)))
+      .filter((s) => typeof s === "string" && s.length)
+      .slice(0, CONFIG.K);
+  }
+
+  async function fetchSuggestions(q) {
+    const ctrl = new AbortController();
+    state.ctrl && state.ctrl.abort();
+    state.ctrl = ctrl;
+    const timeout = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
+    try {
+      const url = new URL(CONFIG.SUGGEST_PATH, CONFIG.API_BASE);
+      url.searchParams.set("q", q);
+      url.searchParams.set("k", String(CONFIG.K));
+      const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: "application/json" } });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return { items: normalize(await res.json()), demo: false };
+    } catch (err) {
+      if (ctrl !== state.ctrl) return null; // superseded by a newer keystroke
+      if (!CONFIG.DEMO_FALLBACK) return { items: [], demo: false, offline: true };
+      return { items: demoSuggest(q), demo: true };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /* ---------- rendering ---------- */
+  const SEARCH_ICON =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>';
+
+  function render(items, typed, meta) {
+    listbox.textContent = "";
+    items.forEach((text, i) => {
+      const li = document.createElement("li");
+      li.className = "option";
+      li.id = "opt-" + i;
+      li.setAttribute("role", "option");
+      li.setAttribute("aria-selected", "false");
+      li.innerHTML = SEARCH_ICON;
+
+      const label = document.createElement("span");
+      label.className = "label";
+      const n = text.toLowerCase().startsWith(typed.toLowerCase()) ? typed.length : 0;
+      if (n) {
+        const b = document.createElement("b");
+        b.textContent = text.slice(0, n);
+        label.append(b, document.createTextNode(text.slice(n)));
+      } else {
+        label.textContent = text;
+      }
+
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      hint.textContent = "Enter";
+      hint.setAttribute("aria-hidden", "true");
+
+      li.append(label, hint);
+      li.addEventListener("mousedown", (e) => e.preventDefault());
+      li.addEventListener("mousemove", () => setActive(i));
+      li.addEventListener("click", () => choose(text));
+      listbox.append(li);
+    });
+
+    if (meta && meta.demo) {
+      statusEl.textContent = "Demo suggestions · backend not connected";
+      statusEl.hidden = false;
+    } else if (meta && meta.offline) {
+      statusEl.textContent = "Backend not reachable";
+      statusEl.hidden = false;
+    } else {
+      statusEl.hidden = true;
+    }
+
+    state.items = items;
+    state.active = -1;
+    const show = items.length > 0 || (meta && (meta.offline));
+    show ? openList() : closeList();
+    live.textContent = items.length
+      ? items.length + (items.length === 1 ? " suggestion" : " suggestions") + " available"
+      : "";
+  }
+
+  function openList() {
+    state.open = true;
+    dropdown.classList.add("open");
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function closeList() {
+    state.open = false;
+    dropdown.classList.remove("open");
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    state.active = -1;
+  }
+
+  function setActive(i) {
+    const opts = listbox.children;
+    if (state.active >= 0 && opts[state.active]) opts[state.active].setAttribute("aria-selected", "false");
+    state.active = i;
+    if (i >= 0 && opts[i]) {
+      opts[i].setAttribute("aria-selected", "true");
+      input.setAttribute("aria-activedescendant", opts[i].id);
+    } else {
+      input.removeAttribute("aria-activedescendant");
+    }
+  }
+
+  /* ---------- actions ---------- */
+  function runSearch(query) {
+    const q = query.trim();
+    if (!q) return;
+    document.dispatchEvent(new CustomEvent("trievo:search", { detail: { query: q } }));
+    if (CONFIG.RESULTS_URL) window.location.href = CONFIG.RESULTS_URL + encodeURIComponent(q);
+  }
+
+  function choose(text) {
+    input.value = text;
+    syncClear();
+    closeList();
+    runSearch(text);
+  }
+
+  function syncClear() {
+    clearBtn.classList.toggle("visible", input.value.length > 0);
+  }
+
+  async function update() {
+    const q = input.value.trim();
+    syncClear();
+    if (!q) {
+      state.ctrl && state.ctrl.abort();
+      closeList();
+      return;
+    }
+    const result = await fetchSuggestions(q);
+    if (!result || input.value.trim() !== q) return;
+    render(result.items, q, result);
+  }
+
+  /* ---------- events ---------- */
+  input.addEventListener("input", () => {
+    clearTimeout(state.timer);
+    state.timer = setTimeout(update, CONFIG.DEBOUNCE_MS);
+    syncClear();
+  });
+
+  input.addEventListener("keydown", (e) => {
+    const n = state.items.length;
+    switch (e.key) {
+      case "ArrowDown":
+        if (!state.open && n) { openList(); }
+        if (n) { e.preventDefault(); setActive((state.active + 1) % n); }
+        break;
+      case "ArrowUp":
+        if (n) { e.preventDefault(); setActive(state.active <= 0 ? n - 1 : state.active - 1); }
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (state.open && state.active >= 0) choose(state.items[state.active]);
+        else { closeList(); runSearch(input.value); }
+        break;
+      case "Escape":
+        if (state.open) { e.preventDefault(); closeList(); }
+        break;
+    }
+  });
+
+  input.addEventListener("focus", () => {
+    if (state.items.length && input.value.trim()) openList();
+  });
+
+  input.addEventListener("blur", () => closeList());
+
+  form.addEventListener("submit", (e) => e.preventDefault());
+
+  clearBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  clearBtn.addEventListener("click", () => {
+    input.value = "";
+    state.items = [];
+    syncClear();
+    closeList();
+    input.focus();
+  });
+
+  document.querySelectorAll(".chip").forEach((chip) =>
+    chip.addEventListener("click", () => {
+      input.value = chip.dataset.q;
+      input.focus();
+      update();
+    })
+  );
+
+  // "/" focuses the search bar
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "/" && document.activeElement !== input && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      input.focus();
+    }
+  });
+
+  input.focus({ preventScroll: true });
+})();
+
+/* ---------- Logo animation helpers ---------- */
+(() => {
+  "use strict";
+  const stage = document.getElementById("logo-stage");
+  const flip = document.getElementById("flip");
+  if (!stage || !flip) return;
+
+  // Extruded edge: a few dark copies of the ring + handle stacked behind the
+  // front face, so the logo has visible thickness while it turns.
+  const NS = "http://www.w3.org/2000/svg";
+  const LAYERS = 6, STEP = 1.1;
+  const shades = ["#7a4fe0", "#6b42cc", "#5d37b8", "#502ea4", "#442690", "#381f7c"];
+  for (let i = 1; i <= LAYERS; i++) {
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 120 120");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("class", "depth");
+    svg.style.transform = "translateZ(" + (-i * STEP) + "px)";
+    svg.innerHTML =
+      '<circle cx="54" cy="54" r="38" fill="none" stroke="' + shades[i - 1] + '" stroke-width="9"/>' +
+      '<line x1="81" y1="81" x2="106" y2="106" stroke="' + shades[i - 1] + '" stroke-width="12" stroke-linecap="round"/>';
+    flip.insertBefore(svg, flip.firstChild);
+  }
+
+  // Click the logo to replay the intro.
+  stage.addEventListener("click", () => {
+    stage.getAnimations({ subtree: true }).forEach((a) => { a.cancel(); a.play(); });
+  });
+})();
+</script>
+</body>
+</html>
