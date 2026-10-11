@@ -1,102 +1,97 @@
 #ifndef TOPK_H
 #define TOPK_H
 
-#include <vector>
 #include <string>
+#include <vector>
 #include <algorithm>
 
-using namespace std;
+struct Suggestion {
+    std::string query;
+    long long score;
+
+    Suggestion(const std::string& q, long long s)
+        : query(q), score(s) {}
+};
 
 class TopK {
 private:
-    vector<pair<string, int>> heap;
-    int capacity;
+    std::vector<Suggestion> heap;
+    std::size_t capacity;
 
-    // Returns true if a should rank higher than b.
-    bool better(
-        const pair<string, int>& a,
-        const pair<string, int>& b
-    ) const {
-        if (a.second != b.second) {
-            return a.second > b.second;
-        }
+    static bool better(
+        const Suggestion& a,
+        const Suggestion& b
+    ) {
+        if (a.score != b.score)
+            return a.score > b.score;
 
-        return a.first < b.first;
+        return a.query < b.query;
     }
 
-    // Maintain the heap after insertion.
-    void siftUp(int index) {
+    // The root stores the worst suggestion currently retained.
+    void siftUp(std::size_t index) {
         while (index > 0) {
-            int parent = (index - 1) / 2;
+            std::size_t parent = (index - 1) / 2;
 
-            // Stop when the parent is worse than or equal
-            // to the child: the root must be the worst item.
             if (better(heap[parent], heap[index])) {
-                swap(heap[parent], heap[index]);
+                std::swap(heap[parent], heap[index]);
+                index = parent;
             } else {
                 break;
             }
-
-            index = parent;
         }
     }
 
-    // Maintain the heap after replacing its root.
-    void siftDown(int index) {
-        int size = static_cast<int>(heap.size());
-
+    void siftDown(std::size_t index) {
         while (true) {
-            int worst = index;
-            int left = 2 * index + 1;
-            int right = 2 * index + 2;
+            std::size_t worst = index;
+            std::size_t left = 2 * index + 1;
+            std::size_t right = 2 * index + 2;
 
-            // Find the worst-ranked element.
-            if (left < size && better(heap[worst], heap[left])) {
+            if (left < heap.size() &&
+                better(heap[worst], heap[left])) {
                 worst = left;
             }
 
-            if (right < size && better(heap[worst], heap[right])) {
+            if (right < heap.size() &&
+                better(heap[worst], heap[right])) {
                 worst = right;
             }
 
-            if (worst == index) {
+            if (worst == index)
                 break;
-            }
 
-            swap(heap[index], heap[worst]);
+            std::swap(heap[index], heap[worst]);
             index = worst;
         }
     }
 
 public:
-    explicit TopK(int k) : capacity(k) {}
+    explicit TopK(std::size_t k)
+        : capacity(k) {
+        heap.reserve(k);
+    }
 
-    void add(const pair<string, int>& candidate) {
-        if (capacity <= 0) {
+    void add(const Suggestion& suggestion) {
+        if (capacity == 0)
             return;
-        }
 
-        if (static_cast<int>(heap.size()) < capacity) {
-            heap.push_back(candidate);
-            siftUp(static_cast<int>(heap.size()) - 1);
-        } else if (better(candidate, heap[0])) {
-            heap[0] = candidate;
+        if (heap.size() < capacity) {
+            heap.push_back(suggestion);
+            siftUp(heap.size() - 1);
+        } else if (better(suggestion, heap[0])) {
+            heap[0] = suggestion;
             siftDown(0);
         }
     }
 
-    vector<pair<string, int>> getResults() const {
-        vector<pair<string, int>> results = heap;
+    std::vector<Suggestion> getResults() const {
+        std::vector<Suggestion> results = heap;
 
-        sort(
+        std::sort(
             results.begin(),
             results.end(),
-            [this](
-                const pair<string, int>& a,
-                const pair<string, int>& b
-            ) {
-                return better(a, b);
-            }
+            better
         );
 
         return results;

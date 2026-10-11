@@ -1,0 +1,3 @@
+# query<TAB>selection_count
+c# array	1
+java api	1

@@ -3,146 +3,263 @@
 
 #include <string>
 #include <vector>
-#include <cctype>
+#include <climits>
 
-using namespace std;
+struct QueryRecord {
+    std::string query;
+    long long score;
+    long long selections;
 
-class TrieNode {
-public:
-    TrieNode* children[27];
-    bool isEndOfQuery;
-    int frequency;
-
-    TrieNode() {
-        isEndOfQuery = false;
-        frequency = 0;
-
-        for (int i = 0; i < 27; i++) {
-            children[i] = nullptr;
-        }
-    }
+    QueryRecord(const std::string& q, long long s)
+        : query(q), score(s), selections(0) {}
 };
 
 class Trie {
 private:
-    TrieNode* root;
+    struct Node {
+        int firstChild;
+        int nextSibling;
+        int recordIndex;
+        unsigned char ch;
 
-    string toLowerCase(const string& text) {
-        string result = text;
+        Node(unsigned char c = 0)
+            : firstChild(-1),
+              nextSibling(-1),
+              recordIndex(-1),
+              ch(c) {}
+    };
 
-        for (char& ch : result) {
-            ch = static_cast<char>(
-                tolower(static_cast<unsigned char>(ch))
-            );
-        }
+    std::vector<Node> nodes;
+    std::vector<QueryRecord> records;
 
-        return result;
-    }
+    int findChild(int parent, unsigned char ch) const {
+        int child = nodes[parent].firstChild;
 
-    int getIndex(char ch) {
-        if (ch >= 'a' && ch <= 'z') {
-            return ch - 'a';
-        }
+        while (child != -1) {
+            if (nodes[child].ch == ch)
+                return child;
 
-        if (ch == ' ') {
-            return 26;
+            child = nodes[child].nextSibling;
         }
 
         return -1;
     }
 
-    TrieNode* searchPrefix(const string& prefix) {
-        TrieNode* current = root;
+    int getOrCreateChild(int parent, unsigned char ch) {
+        int child = findChild(parent, ch);
 
-        for (char ch : prefix) {
-            int index = getIndex(ch);
+        if (child != -1)
+            return child;
 
-            if (index == -1 ||
-                current->children[index] == nullptr) {
-                return nullptr;
-            }
+        int index = static_cast<int>(nodes.size());
 
-            current = current->children[index];
+        nodes.push_back(Node(ch));
+
+        nodes[index].nextSibling = nodes[parent].firstChild;
+        nodes[parent].firstChild = index;
+
+        return index;
+    }
+
+    int findNode(const std::string& text) const {
+        int current = 0;
+
+        for (std::size_t i = 0; i < text.size(); ++i) {
+            int child = findChild(
+                current,
+                static_cast<unsigned char>(text[i])
+            );
+
+            if (child == -1)
+                return -1;
+
+            current = child;
         }
 
         return current;
     }
 
-    void collectWords(
-        TrieNode* node,
-        string& currentWord,
-        vector<pair<string, int>>& results
-    ) {
-        if (node == nullptr) {
-            return;
-        }
+    template <typename Callback>
+    void traverse(int nodeIndex, Callback& callback) const {
+        int index = nodes[nodeIndex].recordIndex;
 
-        if (node->isEndOfQuery) {
-            results.push_back({currentWord, node->frequency});
-        }
+        if (index != -1)
+            callback(records[index]);
 
-        for (int i = 0; i < 27; i++) {
-            if (node->children[i] != nullptr) {
-                if (i == 26) {
-                    currentWord.push_back(' ');
-                } else {
-                    currentWord.push_back('a' + i);
-                }
+        int child = nodes[nodeIndex].firstChild;
 
-                collectWords(
-                    node->children[i],
-                    currentWord,
-                    results
-                );
-
-                currentWord.pop_back();
-            }
+        while (child != -1) {
+            traverse(child, callback);
+            child = nodes[child].nextSibling;
         }
     }
 
 public:
     Trie() {
-        root = new TrieNode();
+        nodes.push_back(Node());
     }
 
-    void insert(const string& query, int frequency) {
-        string normalizedQuery = toLowerCase(query);
-        TrieNode* current = root;
+    static std::string normalize(const std::string& text) {
+        std::string result;
+        result.reserve(text.size());
 
-        for (char ch : normalizedQuery) {
-            int index = getIndex(ch);
+        bool previousSpace = true;
 
-            if (index == -1) {
-                return;
+        for (std::size_t i = 0; i < text.size(); ++i) {
+            unsigned char ch =
+                static_cast<unsigned char>(text[i]);
+
+            if (ch == ' ' || ch == '\t' ||
+                ch == '\r' || ch == '\n') {
+
+                if (!previousSpace && !result.empty()) {
+                    result.push_back(' ');
+                    previousSpace = true;
+                }
+            } else {
+                // Convert ASCII uppercase letters to lowercase.
+                // Preserve symbols and UTF-8 bytes.
+                if (ch >= 'A' && ch <= 'Z')
+                    ch = ch - 'A' + 'a';
+
+                result.push_back(static_cast<char>(ch));
+                previousSpace = false;
             }
-
-            if (current->children[index] == nullptr) {
-                current->children[index] = new TrieNode();
-            }
-
-            current = current->children[index];
         }
 
-        current->isEndOfQuery = true;
-        current->frequency = frequency;
+        if (!result.empty() && result.back() == ' ')
+            result.erase(result.size() - 1);
+
+        return result;
     }
 
-    vector<pair<string, int>> autocomplete(const string& prefix) {
-        vector<pair<string, int>> results;
+    bool insert(const std::string& rawQuery,
+                long long initialScore = 1) {
 
-        string normalizedPrefix = toLowerCase(prefix);
+        std::string query = normalize(rawQuery);
 
-        TrieNode* prefixNode = searchPrefix(normalizedPrefix);
+        if (query.empty())
+            return false;
 
-        if (prefixNode == nullptr) {
-            return results;
+        int current = 0;
+
+        for (std::size_t i = 0; i < query.size(); ++i) {
+            current = getOrCreateChild(
+                current,
+                static_cast<unsigned char>(query[i])
+            );
         }
 
-        string currentWord = normalizedPrefix;
+        int existing = nodes[current].recordIndex;
 
-        collectWords(prefixNode, currentWord, results);
+        if (existing != -1) {
+            if (initialScore > records[existing].score)
+                records[existing].score = initialScore;
 
-        return results;
+            return false;
+        }
+
+        int index = static_cast<int>(records.size());
+
+        records.push_back(
+            QueryRecord(
+                query,
+                initialScore > 0 ? initialScore : 1
+            )
+        );
+
+        nodes[current].recordIndex = index;
+
+        return true;
+    }
+
+    bool contains(const std::string& rawQuery) const {
+        std::string query = normalize(rawQuery);
+
+        if (query.empty())
+            return false;
+
+        int index = findNode(query);
+
+        return index != -1 &&
+               nodes[index].recordIndex != -1;
+    }
+
+    bool recordSelection(const std::string& rawQuery) {
+        std::string query = normalize(rawQuery);
+
+        if (query.empty())
+            return false;
+
+        int index = findNode(query);
+
+        if (index == -1 ||
+            nodes[index].recordIndex == -1) {
+
+            insert(query, 1);
+            index = findNode(query);
+        }
+
+        int recordIndex = nodes[index].recordIndex;
+
+        if (records[recordIndex].score < LLONG_MAX)
+            ++records[recordIndex].score;
+
+        if (records[recordIndex].selections < LLONG_MAX)
+            ++records[recordIndex].selections;
+
+        return true;
+    }
+
+    void applySavedSelections(
+        const std::string& rawQuery,
+        long long count
+    ) {
+        std::string query = normalize(rawQuery);
+
+        if (query.empty() || count <= 0)
+            return;
+
+        int index = findNode(query);
+
+        if (index == -1 ||
+            nodes[index].recordIndex == -1) {
+
+            insert(query, 1);
+            index = findNode(query);
+        }
+
+        int recordIndex = nodes[index].recordIndex;
+
+        records[recordIndex].selections = count;
+
+        if (records[recordIndex].score <= LLONG_MAX - count)
+            records[recordIndex].score += count;
+        else
+            records[recordIndex].score = LLONG_MAX;
+    }
+
+    template <typename Callback>
+    void forEachMatch(
+        const std::string& rawPrefix,
+        Callback callback
+    ) const {
+        std::string prefix = normalize(rawPrefix);
+
+        int index = findNode(prefix);
+
+        if (index == -1)
+            return;
+
+        traverse(index, callback);
+    }
+
+    const std::vector<QueryRecord>& getRecords() const {
+        return records;
+    }
+
+    std::size_t queryCount() const {
+        return records.size();
     }
 };
 
