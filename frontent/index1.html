@@ -608,37 +608,9 @@
     K: 5,
     DEBOUNCE_MS: 120,
     TIMEOUT_MS: 1500,
-    // When the backend can't be reached, fall back to DEMO_DATA below
-    // (and say so in the dropdown). Set to false to show nothing instead.
-    DEMO_FALLBACK: true,
     // Where a chosen query goes. Set to "" to only emit the `trievo:search` event.
     RESULTS_URL: "https://duckduckgo.com/?q=",
   };
-
-  /* =====================================================================
-     DEMO DATA — used ONLY when the backend is unreachable.
-     Not a real index; replace by connecting the API above.
-     ===================================================================== */
-  const DEMO_DATA = [
-    ["python tutorial", 98], ["python list comprehension", 90], ["python vs c++", 74],
-    ["python decorators", 71], ["python virtual environment", 69], ["python dictionary methods", 66],
-    ["python asyncio", 61], ["python pandas dataframe", 88], ["python for beginners", 93],
-    ["c++ tutorial", 92], ["c++ vector", 80], ["c++ trie implementation", 72],
-    ["c++ smart pointers", 77], ["c++ stl algorithms", 68], ["c++ templates", 70],
-    ["c++ priority queue", 65], ["c++ http server", 58],
-    ["java tutorial", 91], ["java streams", 76], ["java vs python", 73],
-    ["java spring boot", 85], ["java collections framework", 69], ["java interview questions", 78],
-    ["javascript tutorial", 97], ["javascript promises", 82], ["javascript array methods", 84],
-    ["javascript closures", 79], ["javascript fetch api", 75], ["javascript async await", 81],
-    ["html tutorial", 89], ["html forms", 64], ["html5 semantic elements", 60],
-    ["css grid", 83], ["css flexbox", 86], ["css animations", 67], ["css variables", 62],
-    ["sql tutorial", 90], ["sql joins", 87], ["sql injection", 72], ["sql window functions", 63],
-    ["sql vs nosql", 70], ["sql group by", 66],
-    ["react hooks", 85], ["rust ownership", 68], ["go goroutines", 64],
-    ["typescript generics", 71], ["docker compose", 79], ["git rebase", 73],
-    ["linux commands", 82], ["kubernetes basics", 69], ["rest api design", 67],
-    ["data structures and algorithms", 88], ["binary search tree", 70], ["top k algorithm", 61],
-  ];
 
   const $ = (id) => document.getElementById(id);
   const input = $("q"), form = $("search-form"), dropdown = $("dropdown");
@@ -647,15 +619,6 @@
   const state = { items: [], active: -1, ctrl: null, timer: null, open: false };
 
   /* ---------- data ---------- */
-  function demoSuggest(q) {
-    const p = q.toLowerCase();
-    return DEMO_DATA
-      .filter(([text]) => text.startsWith(p))
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, CONFIG.K)
-      .map(([text]) => text);
-  }
-
   function normalize(payload) {
     const arr = Array.isArray(payload) ? payload : (payload && payload.suggestions) || [];
     return arr
@@ -678,8 +641,7 @@
       return { items: normalize(await res.json()), demo: false };
     } catch (err) {
       if (ctrl !== state.ctrl) return null; // superseded by a newer keystroke
-      if (!CONFIG.DEMO_FALLBACK) return { items: [], demo: false, offline: true };
-      return { items: demoSuggest(q), demo: true };
+      return { items: [], demo: false, offline: true };
     } finally {
       clearTimeout(timeout);
     }
@@ -722,10 +684,7 @@
       listbox.append(li);
     });
 
-    if (meta && meta.demo) {
-      statusEl.textContent = "Demo suggestions · backend not connected";
-      statusEl.hidden = false;
-    } else if (meta && meta.offline) {
+    if (meta && meta.offline) {
       statusEl.textContent = "Backend not reachable";
       statusEl.hidden = false;
     } else {
