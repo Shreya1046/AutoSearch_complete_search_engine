@@ -6,6 +6,10 @@
 #include <cstdio>
 #include <cstdlib>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
+
 #include "Trie.h"
 #include "TopK.h"
 
@@ -32,6 +36,7 @@ const string USER_SCORES_FILE =
     DATA_DIR + "user_scores.txt";
 
 const size_t TOP_K = 5;
+const unsigned short HTTP_PORT = 8080;
 
 Trie searchTrie;
 
@@ -461,7 +466,166 @@ vector<Suggestion> getSuggestions(
 }
 
 
-int main() {
+#ifdef _WIN32
+
+string decodeUrl(const string& value) {
+    string result;
+
+    for (size_t i = 0; i < value.size(); ++i) {
+        if (value[i] == '+') {
+            result.push_back(' ');
+        } else if (value[i] == '%' && i + 2 < value.size()) {
+            char hex[3] = { value[i + 1], value[i + 2], '\0' };
+            char* end = NULL;
+            long number = strtol(hex, &end, 16);
+
+            if (end != hex && *end == '\0') {
+                result.push_back(static_cast<char>(number));
+                i += 2;
+            } else {
+                result.push_back(value[i]);
+            }
+        } else {
+            result.push_back(value[i]);
+        }
+    }
+
+    return result;
+}
+
+
+string escapeJson(const string& value) {
+    string result;
+
+    for (size_t i = 0; i < value.size(); ++i) {
+        if (value[i] == '"')
+            result += "\\\"";
+        else if (value[i] == '\\')
+            result += "\\\\";
+        else
+            result.push_back(value[i]);
+    }
+
+    return result;
+}
+
+
+void sendJson(
+    SOCKET client,
+    const string& status,
+    const string& body
+) {
+    string response =
+        "HTTP/1.1 " + status + "\r\n"
+        "Content-Type: application/json; charset=utf-8\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "Access-Control-Allow-Methods: GET, OPTIONS\r\n"
+        "Content-Length: " + to_string(body.size()) + "\r\n"
+        "Connection: close\r\n\r\n" + body;
+
+    send(client, response.c_str(), static_cast<int>(response.size()), 0);
+}
+
+
+void handleClient(SOCKET client) {
+    char buffer[8192];
+    int length = recv(client, buffer, sizeof(buffer) - 1, 0);
+
+    if (length <= 0)
+        return;
+
+    buffer[length] = '\0';
+    string request(buffer);
+    string firstLine = request.substr(0, request.find("\r\n"));
+    string method;
+    string target;
+    string version;
+    stringstream(firstLine) >> method >> target >> version;
+
+    if (method == "OPTIONS") {
+        sendJson(client, "204 No Content", "{}");
+        return;
+    }
+
+    size_t queryStart = target.find("/suggest?q=");
+
+    if (method != "GET" || queryStart != 0) {
+        sendJson(client, "404 Not Found", "{\"suggestions\":[]}");
+        return;
+    }
+
+    string query = target.substr(11);
+    size_t nextParameter = query.find('&');
+
+    if (nextParameter != string::npos)
+        query.erase(nextParameter);
+
+    query = decodeUrl(query);
+    vector<Suggestion> results = getSuggestions(query);
+    string body = "{\"suggestions\":[";
+
+    for (size_t i = 0; i < results.size(); ++i) {
+        if (i > 0)
+            body += ",";
+
+        body += "\"" + escapeJson(results[i].query) + "\"";
+    }
+
+    body += "]}";
+    sendJson(client, "200 OK", body);
+}
+
+
+int runHttpServer() {
+    WSADATA startup;
+
+    if (WSAStartup(MAKEWORD(2, 2), &startup) != 0)
+        return 1;
+
+    SOCKET server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+    if (server == INVALID_SOCKET) {
+        WSACleanup();
+        return 1;
+    }
+
+    sockaddr_in address;
+    ZeroMemory(&address, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    address.sin_port = htons(HTTP_PORT);
+
+    if (bind(server, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR ||
+        listen(server, 16) == SOCKET_ERROR) {
+        closesocket(server);
+        WSACleanup();
+        return 1;
+    }
+
+    cout << "[OK] HTTP backend listening on port " << HTTP_PORT << "\n";
+
+    while (true) {
+        SOCKET client = accept(server, NULL, NULL);
+
+        if (client == INVALID_SOCKET)
+            break;
+
+        handleClient(client);
+        closesocket(client);
+    }
+
+    closesocket(server);
+    WSACleanup();
+    return 0;
+}
+
+#endif
+
+
+int main(
+    int argc,
+    char** argv
+) {
     cout << "=====================================\n";
     cout << " C++ TECHNOLOGY AUTOCOMPLETE ENGINE\n";
     cout << "=====================================\n\n";
@@ -495,6 +659,11 @@ int main() {
 
     cout << "\nUnique queries loaded: "
          << searchTrie.queryCount() << "\n";
+
+#ifdef _WIN32
+    if (argc > 1 && string(argv[1]) == "--server")
+        return runHttpServer();
+#endif
 
     cout << "\nCommands:\n";
     cout << "  Type a prefix to search.\n";
